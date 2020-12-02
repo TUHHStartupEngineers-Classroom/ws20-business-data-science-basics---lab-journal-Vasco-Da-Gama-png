@@ -27,8 +27,7 @@ Analyze the sales by location (state) with a bar plot. Since state and city are 
 
 Attached is the code and the figure for the first exercise of the challenge. As you can see North Rhine-Westphalia is the state with the highest revenue.
 
-```{r plot, fig.width=10, fig.height=7}
-setwd("C:/Users/Vasco Wild/Documents/GitHub/ws20-business-data-science-basics---lab-journal-Vasco-Da-Gama-png/data-science")
+```{r plot1, fig.width=10, fig.height=7}
 # Data Science at TUHH ------------------------------------------------------
 # SALES ANALYSIS ----
 
@@ -144,6 +143,7 @@ sales_by_loc_tbl %>%
     y = "Revenue"
   )
 ```
+
 ## Second exercise
 
 **Task:**
@@ -151,7 +151,7 @@ Analyze the sales by location and year (facet_wrap). Because there are 12 states
 
 In the next part, the manipulation and the figure for the years and the location is made. As you can see in all states, except Mecklenburg-Western Pommern, Saxony-Anhalt and Schleswig-Holstein, revenue trend is going upwards.
 
-```{r plot, fig.width=15, fig.height=7}
+```{r plot2, fig.width=15, fig.height=7}
 # 6.2 Sales by Year and location ----
 # Step 1 - Manipulate
 sales_by_loc_year_tbl <- bike_orderlines_wrangled_tbl %>%
