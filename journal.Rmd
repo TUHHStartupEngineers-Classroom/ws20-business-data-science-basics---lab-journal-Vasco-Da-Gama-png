@@ -1,5 +1,5 @@
 ---
-title: "Journal (reproducible report)"
+title: "Journal - Business Data Science Basics"
 author: "Vasco Alexander Wild"
 date: "2020-11-05"
 output:
@@ -16,39 +16,219 @@ output:
 knitr::opts_chunk$set(message=FALSE,warning=FALSE, cache=TRUE)
 ```
 
-**IMPORTANT:** You can delete everything in here and start fresh. You might want to start by not deleting anything above this line until you know what that stuff is doing.
+# Intro to the tidyverse - Challenge
 
-This is an `.Rmd` file. It is plain text with special features. Any time you write just like this, it will be compiled to normal text in the website. If you put a \# in front of your text, it will create a top level-header.
+In the following is the code and the figures shown I've been writing for the first challenge.
 
-# My first post
+## First excercise
 
-Last compiled: `r Sys.Date()`
+**Task:**
+Analyze the sales by location (state) with a bar plot. Since state and city are multiple features (variables), they should be split. Which state has the highest revenue? Replace your bike_orderlines_wrangled_tbl object with the newly wrangled object (with the columns state and city).
 
-Notice that whatever you define as a top level header, automatically gets put into the table of contents bar on the left. 
+Attached is the code and the figure for the first exercise of the challenge. As you can see North Rhine-Westphalia is the state with the highest revenue.
 
-## Second level header
+```{r plot, fig.width=10, fig.height=7}
+setwd("C:/Users/Vasco Wild/Documents/GitHub/ws20-business-data-science-basics---lab-journal-Vasco-Da-Gama-png/data-science")
+# Data Science at TUHH ------------------------------------------------------
+# SALES ANALYSIS ----
 
-You can add more headers by adding more hashtags. These won't be put into the table of contents
+# 1.0 Load libraries ----
 
-### third level header
+library(tidyverse)
+library(readxl)
+library(lubridate)
 
-Here's an even lower level header
+# 2.0 Importing Files ----
 
-# My second post (note the order)
+bikes_tbl <- read_excel(path = "data-science/00_data/01_bike_sales/01_raw_data/bikes.xlsx")
+orderline_tbl <- read_excel(path = "data-science/00_data/01_bike_sales/01_raw_data/orderlines.xlsx")
 
-Last compiled: `r Sys.Date()`
+# Not necessary for this analysis, but for the sake of completeness
+bikeshops_tbl  <- read_excel("data-science/00_data/01_bike_sales/01_raw_data/bikeshops.xlsx")
 
-I'm writing this tutorial going from the top down. And, this is how it will be printed. So, notice the second post is second in the list. If you want your most recent post to be at the top, then make a new post starting at the top. If you want the oldest first, do, then keep adding to the bottom
+# 4.0 Joining Data ----
 
-# Adding R stuff
+bike_orderlines_joined_tbl <- orderline_tbl %>%
+  left_join(bikes_tbl, by = c("product.id" = "bike.id")) %>%
+  left_join(bikeshops_tbl, by = c("customer.id" = "bikeshop.id"))
 
-So far this is just a blog where you can write in plain text and serve your writing to a webpage. One of the main purposes of this lab journal is to record your progress learning R. The reason I am asking you to use this process is because you can both make a website, and a lab journal, and learn R all in R-studio. This makes everything really convenient and in the same place. 
+# 5.0 Wrangling Data ----
 
-So, let's say you are learning how to make a histogram in R. For example, maybe you want to sample 100 numbers from a normal distribution with mean = 0, and standard deviation = 1, and then you want to plot a histogram. You can do this right here by using an r code block, like this:
+bike_orderlines_wrangled_tbl <- bike_orderlines_joined_tbl %>%
+  # 5.1 Separate category name
+  separate(col = category,
+           into = c("category.1", "category.2", "category.3"),
+           sep = " - ") %>%
+  
+  # Separate citty and state
+  separate(col = location,
+           into = c("city", "state"),
+           sep = ", ") %>%
+  
+  # 5.2 Add the total price (price * quantity) 
+  # Add a column to a tibble that uses a formula-style calculation of other columns
+  mutate(total.price = price * quantity) %>%
+  
+  # 5.3 Optional: Reorganize. Using select to grab or remove unnecessary columns
+  # 5.3.1 by exact column name
+  select(-...1, -gender) %>%
+  
+  # 5.3.2 by a pattern
+  # You can use the select_helpers to define patterns. 
+  # Type ?ends_with and click on Select helpers in the documentation
+  select(-ends_with(".id")) %>%
+  
+  # 5.3.3 Actually we need the column "order.id". Let's bind it back to the data
+  bind_cols(bike_orderlines_joined_tbl %>% select(order.id)) %>% 
+  
+  # 5.3.4 You can reorder the data by selecting the columns in your desired order.
+  # You can use select_helpers like contains() or everything()
+  select(order.id, contains("order"), contains("model"), contains("category"),
+         price, quantity, total.price,
+         everything()) %>%
+  
+  # 5.4 Rename columns because we actually wanted underscores instead of the dots
+  # (one at the time vs. multiple at once)
+  rename(bikeshop = name) %>%
+  set_names(names(.) %>% str_replace_all("\\.", "_"))
+  
 
-```{r}
-samples <- rnorm(100, mean=0, sd=1)
-hist(samples)
+# 6.0 Business Insights ----
+# 6.1 Sales by location ----
+# Step 1 - Manipulate
+sales_by_loc_tbl <- bike_orderlines_wrangled_tbl %>%
+  
+  # Select columns
+  select(state, total_price) %>%
+  
+  # Grouping and summarizing
+  group_by(state) %>%
+  summarize(sales = sum(total_price)) %>%
+  
+  # arranging it with descending price
+  arrange(desc(sales)) %>%
+  
+   # Optional: Add a column that turns the numbers into a currency format 
+  # (makes it in the plot optically more appealing)
+  # mutate(sales_text = scales::dollar(sales)) <- Works for dollar values
+  mutate(sales_text = scales::dollar(sales, big.mark = ".", 
+                                     decimal.mark = ",", 
+                                     prefix = "", 
+                                     suffix = " €"))
+
+# Step 2 - Visualize
+sales_by_loc_tbl %>%
+  
+  # Setup canvas with the columns state (x-axis) and sales (y-axis)
+  ggplot(aes(x = state, y = sales)) +
+  
+  # Geometries
+  geom_col(fill = "#2DC6D6") + # Use geom_col for a bar plot
+  geom_label(aes(label = sales_text)) + # Adding labels to the bars
+  #geom_smooth(method = "lm", se = FALSE) + # Adding a trendline
+  
+  # Formatting
+  scale_y_continuous(labels = scales::dollar) + # Change the y-axis.
+  # Again, we have to adjust it for euro values
+  scale_y_continuous(labels = scales::dollar_format(big.mark = ".",
+                                                    decimal.mark = ",",
+                                                    prefix = "",
+                                                    suffix = " €")) +
+  # rotating x-axis labels
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  
+  labs(
+    title    = "Revenue by year in the states",
+    #subtitle = "Upward Trend",
+    x = "", # Override defaults for x and y
+    y = "Revenue"
+  )
+```
+## Second exercise
+
+**Task:**
+Analyze the sales by location and year (facet_wrap). Because there are 12 states with bike stores, you should get 12 plots.
+
+In the next part, the manipulation and the figure for the years and the location is made. As you can see in all states, except Mecklenburg-Western Pommern, Saxony-Anhalt and Schleswig-Holstein, revenue trend is going upwards.
+
+```{r plot, fig.width=15, fig.height=7}
+# 6.2 Sales by Year and location ----
+# Step 1 - Manipulate
+sales_by_loc_year_tbl <- bike_orderlines_wrangled_tbl %>%
+  
+  # Select columns and add a year
+  select(order_date, total_price, state) %>%
+  mutate(year = year(order_date)) %>%
+  
+  # Group by and summarize year and main catgegory
+  group_by(year, state) %>%
+  summarise(sales = sum(total_price)) %>%
+  ungroup() %>%
+  
+  # Format $ Text
+  mutate(sales_text = scales::dollar(sales, big.mark = ".", 
+                                     decimal.mark = ",", 
+                                     prefix = "", 
+                                     suffix = " €"))
+
+# Step 2 - Visualize
+sales_by_loc_year_tbl %>%
+  
+  # Set up x, y, fill
+  ggplot(aes(x = year, y = sales, fill = state)) +
+  
+  # Geometries
+  geom_col() + # Run up to here to get a stacked bar plot
+  geom_smooth(method = "lm", se = FALSE) + # Adding a trendline
+  
+  # Facet
+  facet_wrap(~ state) +
+  
+  # Formatting
+  scale_y_continuous(labels = scales::dollar_format(big.mark = ".", 
+                                                    decimal.mark = ",", 
+                                                    prefix = "", 
+                                                    suffix = " €")) +
+  labs(
+    title = "Revenue by year and state",
+    subtitle = "",
+    fill = "State" # Changes the legend name
+  )
 ```
 
-When you knit this R Markdown document, you will see that the histogram is printed to the page, along with the R code. This document can be set up to hide the R code in the webpage, just delete the comment (hashtag) from the cold folding option in the yaml header up top. For purposes of letting yourself see the code, and me see the code, best to keep it the way that it is. You'll learn that all of these things and more can be customized in each R code block.
+<!-- **IMPORTANT:** You can delete everything in here and start fresh. You might want to start by not deleting anything above this line until you know what that stuff is doing. -->
+
+<!-- This is an `.Rmd` file. It is plain text with special features. Any time you write just like this, it will be compiled to normal text in the website. If you put a \# in front of your text, it will create a top level-header. -->
+
+<!-- # My first post -->
+
+<!-- Last compiled: `r Sys.Date()` -->
+
+<!-- Notice that whatever you define as a top level header, automatically gets put into the table of contents bar on the left.  -->
+
+<!-- ## Second level header -->
+
+<!-- You can add more headers by adding more hashtags. These won't be put into the table of contents -->
+
+<!-- ### third level header -->
+
+<!-- Here's an even lower level header -->
+
+<!-- # My second post (note the order) -->
+
+<!-- Last compiled: `r Sys.Date()` -->
+
+<!-- I'm writing this tutorial going from the top down. And, this is how it will be printed. So, notice the second post is second in the list. If you want your most recent post to be at the top, then make a new post starting at the top. If you want the oldest first, do, then keep adding to the bottom -->
+
+<!-- # Adding R stuff -->
+
+<!-- So far this is just a blog where you can write in plain text and serve your writing to a webpage. One of the main purposes of this lab journal is to record your progress learning R. The reason I am asking you to use this process is because you can both make a website, and a lab journal, and learn R all in R-studio. This makes everything really convenient and in the same place.  -->
+
+<!-- So, let's say you are learning how to make a histogram in R. For example, maybe you want to sample 100 numbers from a normal distribution with mean = 0, and standard deviation = 1, and then you want to plot a histogram. You can do this right here by using an r code block, like this: -->
+
+<!-- ```{r} -->
+<!-- samples <- rnorm(100, mean=0, sd=1) -->
+<!-- hist(samples) -->
+<!-- ``` -->
+
+<!-- When you knit this R Markdown document, you will see that the histogram is printed to the page, along with the R code. This document can be set up to hide the R code in the webpage, just delete the comment (hashtag) from the cold folding option in the yaml header up top. For purposes of letting yourself see the code, and me see the code, best to keep it the way that it is. You'll learn that all of these things and more can be customized in each R code block. -->
