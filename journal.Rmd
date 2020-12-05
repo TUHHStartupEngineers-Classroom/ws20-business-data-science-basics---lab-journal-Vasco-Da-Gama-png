@@ -27,7 +27,7 @@ Analyze the sales by location (state) with a bar plot. Since state and city are 
 
 Attached is the code and the figure for the first exercise of the challenge. As you can see North Rhine-Westphalia is the state with the highest revenue.
 
-```{r plot1, fig.width=15, fig.height=10}
+```{r challenge1_1, fig.width=15, fig.height=10}
 # Data Science at TUHH ------------------------------------------------------
 # SALES ANALYSIS ----
 
@@ -151,7 +151,7 @@ Analyze the sales by location and year (facet_wrap). Because there are 12 states
 
 In the next part, the manipulation and the figure for the years and the location is made. As you can see in all states, except Mecklenburg-Western Pommern, Saxony-Anhalt and Schleswig-Holstein, revenue trend is going upwards.
 
-```{r plot2, fig.width=15, fig.height=10}
+```{r challenge1_2, fig.width=10, fig.height=15}
 # 6.2 Sales by Year and location ----
 # Step 1 - Manipulate
 sales_by_loc_year_tbl <- bike_orderlines_wrangled_tbl %>%
@@ -189,6 +189,8 @@ sales_by_loc_year_tbl %>%
                                                     decimal.mark = ",", 
                                                     prefix = "", 
                                                     suffix = " €")) +
+  theme(legend.position = "bottom") +
+  
   labs(
     title = "Revenue by year and state",
     subtitle = "",
@@ -196,6 +198,138 @@ sales_by_loc_year_tbl %>%
   )
 ```
 
+# Data Acquisition - Challenge
+
+## First Challenge
+
+**Task:**
+Get some data via an API. There are millions of providers, that offer API access for free and have good documentation about how to query their service. You just have to google them. You can use whatever service you want. For example, you can get data about your listening history (spotify), get data about flights (skyscanner) or just check the weather forecast.
+
+The first challenge was to get some Data via an API. I decided myself for the free Covid19 API. With that I collected information for the last updated data all around the world and for Germany. For the data of Germany I even plotted the summed up amount of confirmed infected people. 
+
+```{r challenge2_1, fig.width=15, fig.height=10}
+library(tidyverse) # Main Package - Loads dplyr, purrr, etc.
+library(rvest)     # HTML Hacking & Web Scraping
+library(xopen)     # Quickly opening URLs
+library(jsonlite)  # converts JSON files to R objects
+library(glue)      # concatenate strings
+library(stringi)   # character string/text processing
+library(furrr)     # Parallel Processing using purrr (iteration)
+library(lubridate)
+library(RSQLite)
+library(httr)
+library(purrr)
+
+link1 <- "https://api.covid19api.com/summary"
+resp <- link1 %>%
+  GET()
+
+covid_global <- resp %>% 
+  .$content %>% 
+  rawToChar() %>% 
+  fromJSON() %>%
+  purrr::pluck("Countries") %>%
+  as_tibble()
+
+cases_by_country_tbl <- covid_global %>%
+  transmute(Country, CountryCode, NewConfirmed,TotalConfirmed, NewDeaths, TotalDeaths, NewRecovered, TotalRecovered, Date = date(Date)) %>%
+  arrange(desc(TotalConfirmed))
+
+link2 <- "https://api.covid19api.com/dayone/country/germany/status/confirmed"
+resp <- link2 %>%
+  GET()
+
+covid_germany_conf_tbl <- resp %>% 
+  .$content %>% 
+  rawToChar() %>%
+  fromJSON() %>%
+  as_tibble() %>%
+  transmute(Date = date(Date), Cases)
+
+cases_by_country_tbl
+covid_germany_conf_tbl
+
+plot(covid_germany_conf_tbl$Date,covid_germany_conf_tbl$Cases,
+     main="Development of Corona in Germany",
+     xlab = "Time",
+     ylab="Sum of Confirmed Infected",
+     type="l",
+     col="blue")
+```
+
+## Second Challenge
+
+**Task:**
+Scrape one of the competitor websites of canyon (either https://www.rosebikes.de/ or https://www.radon-bikes.de) and create a small database. The database should contain the model names and prices for at least one category. Use the selectorgadget to get a good understanding of the website structure.
+
+The second exercise was to scrape data from a website. I decided for the website of ROSE bikes an collected the data for the mountainbike family. Therefore I wanted to get in the end a tibble which lists the model names and prices. The code is shown below. 
+
+```{r challenge2_2, fig.width=15, fig.height=10}
+# second exercise ----
+url_home <- "https://www.rosebikes.de/"
+url_mtb <- "https://www.rosebikes.de/fahrr%C3%A4der/mtb"
+
+# Read in the HTML for the entire webpage
+html_mtb <- read_html(url_mtb)
+
+mtb_category_urls <- html_mtb %>%
+  html_nodes(css = ".catalog-category-bikes__button") %>%
+  html_attr("href") %>%
+  # Convert vector to tibble
+  enframe(name = "position", value = "subdirectory") %>%
+  
+  # Add the domain, because we will get only the subdirectories
+  mutate(url = glue("https://www.rosebikes.de{subdirectory}")) %>%
+  
+  # Some categories are listed multiple times.
+  # We only need unique values
+  distinct(url)
+
+
+getBikeData <- function(model_category_url) {
+  # Read in the html
+  html_model_category <- read_html(model_category_url)
+  
+  # Get the model names
+  model_names <- html_model_category %>%
+    html_nodes(css = ".catalog-category-model__title") %>%
+    html_text() %>%
+    # Remove the query parameters of the URL
+    str_replace_all(pattern = "\\n","") %>%
+    # Convert vector to tibble
+    enframe(name ="position", value ="model")
+  
+  #Get the model prices
+  model_prices <- html_model_category %>%
+    html_nodes(css = ".catalog-category-model__price-current-value") %>%
+    html_text() %>%
+    # Remove the query parameters of the URL
+    str_replace_all(pattern = "\\n","") %>%
+    str_replace_all(pattern = "€","") %>%
+    str_replace_all(pattern = ",00","") %>%
+    str_replace_all(pattern = "\\.","") %>%
+    str_replace_all(pattern = "\\s","") %>%
+    # Convert to numeric
+    as.numeric() %>%
+    # Convert vector to tibble
+    enframe(name ="position", value = "price")
+  
+  bikeData <- left_join(model_names, model_prices, by= "position") %>%
+    select(model, price)
+}  
+
+# Extract the urls as a character vector
+mtb_category_urls_vec <- mtb_category_urls %>% 
+  pull(url)
+
+# Run the function with every url as an argument
+bike_data_lst <- map(mtb_category_urls_vec, getBikeData)
+
+# Merge the list into a tibble
+bike_data_tbl <- bind_rows(bike_data_lst)
+
+bike_data_tbl
+```
 <!-- **IMPORTANT:** You can delete everything in here and start fresh. You might want to start by not deleting anything above this line until you know what that stuff is doing. -->
 
 <!-- This is an `.Rmd` file. It is plain text with special features. Any time you write just like this, it will be compiled to normal text in the website. If you put a \# in front of your text, it will create a top level-header. -->
