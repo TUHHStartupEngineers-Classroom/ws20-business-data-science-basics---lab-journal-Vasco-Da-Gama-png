@@ -41,6 +41,7 @@ vignettes/*.pdf
 *.tsv
 *.tsv
 *.tsv
+*.tsv
 data-science/00_data/patentsview/assignee.tsv
 *.tsv
 *.tsv
